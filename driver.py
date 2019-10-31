@@ -13,24 +13,15 @@ class Map:
         for i in range(0, len(cities)):
             self.pheromones.append([1] * len(self.cities))
             self.local_pheromones.append([0] * len(self.cities))
-        print(self.cities)
-        print(self.pheromones)
-        print(self.local_pheromones)
-        print()
 
     def update_pheromone_local(self, fro, to, val):
         self.local_pheromones[fro][to] += val
-        print(self.local_pheromones)
 
     def update_pheromones_global(self):
         for i in range(0, len(self.cities)):
             for j in range(0, len(self.cities)):
-                if i != j:
-                    self.pheromones[i][j] = (1 - evaporation_factor) * self.pheromones[i][j] + self.local_pheromones[
-                        i][j]
-
-        self.local_pheromones.clear()
-        self.local_pheromones.append([0] * len(self.cities))
+                self.pheromones[i][j] = (1 - evaporation_factor) * self.pheromones[i][j] + self.local_pheromones[i][j]
+        self.reset_locals()
 
     def get_pheromone(self, fro, to):
         return self.pheromones[fro][to]
@@ -38,13 +29,16 @@ class Map:
     def get_distance(self, fro, to):
         return self.distances[fro][to]
 
+    def reset_locals(self):
+        self.local_pheromones.clear()
+        for i in range(0, len(self.cities)):
+            self.local_pheromones.append([0] * len(self.cities))
+
 
 class Ant:
     def __init__(self, current, unvisited):
         self.current = current
         self.unvisited = unvisited
-        print(self.current)
-        print(self.unvisited)
 
     def travel_next(self):
         prob = [0]*len(self.unvisited)
@@ -68,7 +62,16 @@ class Ant:
             else:
                 probability -= prob[i][0]
         self.unvisited.remove(self.current)
-        country.update_pheromone_local(fro, dest, country.get_pheromone(fro, dest) + 1)
+        if fro != dest:
+            country.update_pheromone_local(fro, dest, country.get_pheromone(fro, dest) + 1 / country.get_distance(fro,
+                                                                                                                  dest))
+
+    def reset_ant(self):
+        self.unvisited.clear()
+        self.unvisited += country.cities
+        self.unvisited.remove(self.current)
+        print(self.unvisited)
+        print(self.current)
 
 
 def draw_graph(graph, i):
@@ -127,22 +130,21 @@ for i in range(0, len(copy_nodes)):
     this_ant = Ant(copy_nodes[i], list(set(copy_nodes) - set(copy_nodes[i])))
     ants.append(this_ant)
 
-for i in range(len(nodes) - 1):
-    for ant in ants:
-        ant.travel_next()
-'''
+print(country.pheromones)
 
-for i in range(len(nodes)-1):
-    for ant in ants:
-        ant.travel_next(forced=False)
-while iterations > 0:
+cur = 0
+while cur < iterations:
     for i in range(len(nodes) - 1):
         for ant in ants:
             ant.travel_next()
+    for ant in ants:
+        ant.reset_ant()
+    print("HADOOPA")
+    country.update_pheromones_global()
     print(country.pheromones)
-    iterations -= 1
-'''
-'''
+    cur += 1
+print(distances)
+
 # adding edges and edge labels to distance graph
 for i in range(0, node_count):
     for j in range(0, node_count):
@@ -156,9 +158,11 @@ dg = draw_graph(distance_graph, 0)
 for i in range(0, node_count):
     for j in range(0, node_count):
         if i != j:
-            edgeLabels[(nodes[i], nodes[j])] = 0
+            edgeLabels[(nodes[i], nodes[j])] = country.pheromones[i][j]
 pheromone_graph = [edges, edgeLabels]
 pg = draw_graph(pheromone_graph, 1)
+
+'''
 
 edgeLabels.clear()
 # adding edges and edge labels to pheromone graph
@@ -168,6 +172,5 @@ for i in range(0, node_count):
             edgeLabels[(nodes[i], nodes[j])] = 1
 pheromone_graph = [edges, edgeLabels]
 pg = draw_graph(pheromone_graph, 2)
-
-plt.show()
 '''
+plt.show()
