@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import random
 import operator
+import math
 
 
 class Map:
@@ -13,6 +14,8 @@ class Map:
         for i in range(0, len(cities)):
             self.pheromones.append([1] * len(self.cities))
             self.local_pheromones.append([0] * len(self.cities))
+        for i in range(0, len(cities)):
+            self.pheromones[i][i] = 0
 
     def update_pheromone_local(self, fro, to, val):
         self.local_pheromones[fro][to] += val
@@ -39,32 +42,45 @@ class Ant:
     def __init__(self, current, unvisited):
         self.current = current
         self.unvisited = unvisited
+        self.trail_length = 0
 
     def travel_next(self):
-        prob = [0]*len(self.unvisited)
+        prob = [0] * len(self.unvisited)
+        prob_list = [0] * len(self.unvisited)
         fro = ord(self.current) - 65
         sum = 0
         for i in range(0, len(prob)):
-            to = ord(self.unvisited[i])-65
-            prob[i] = ((country.get_pheromone(fro, to) ** alpha) * (country.get_distance(fro, to) ** beta),
-                       self.unvisited[i])
-            sum += prob[i][0]
+            to = ord(self.unvisited[i]) - 65
+            # print(country.get_pheromone(fro, to), country.get_distance(fro, to))
+            prob[i] = pow(country.get_pheromone(fro, to), alpha) * pow((1 / country.get_distance(fro, to)), beta)
+            # print(prob[i])
+            sum += prob[i]
         for i in range(0, len(prob)):
-            prob[i] = (prob[i][0] / sum, prob[i][1])
-        prob.sort(key=operator.itemgetter(0), reverse=True)
+            prob[i] /= sum
+            # print(prob[i] * sum, prob[i])
+
+        for i in range(0, len(prob)):
+            prob_list[i] = (prob[i], self.unvisited[i])
+
+        prob_list.sort(key=operator.itemgetter(0), reverse=True)
         probability = random.random()
+        # print("Self= ", self.current)
+        # print("Prob= ", probability)
+        # print("ProbList= ", prob_list)
+        # print()
         dest = -1
-        for i in range(0, len(prob)):
-            if probability < prob[i][0]:
-                dest = i
-                self.current = prob[i][1]
+        for i in range(0, len(prob_list)):
+            if probability < prob_list[i][0]:
+                self.current = prob_list[i][1]
+                dest = ord(self.current) - 65
+                self.trail_length += country.get_distance(fro, dest)
                 break
             else:
-                probability -= prob[i][0]
+                probability -= prob_list[i][0]
         self.unvisited.remove(self.current)
         if fro != dest:
-            country.update_pheromone_local(fro, dest, country.get_pheromone(fro, dest) + 1 / country.get_distance(fro,
-                                                                                                                  dest))
+            country.update_pheromone_local(fro, dest,
+                                           country.get_pheromone(fro, dest) + 1 / country.get_distance(fro, dest))
 
     def reset_ant(self):
         self.unvisited.clear()
@@ -84,7 +100,7 @@ def draw_graph(graph, i):
             labels={node: node for node in G.nodes()})
 
     nx.draw_networkx_edge_labels(G, pos, edge_labels=graph[1], font_color='red')
-    plt.savefig(save_at + 'pheromones'+str(i)+'.png', dpi=300)
+    plt.savefig(save_at + 'graph'+str(i)+'.png', dpi=300)
     return G
 
 
@@ -109,12 +125,13 @@ def init():
 node_count = 5
 min_distance_limit = 1
 max_distance_limit = 30
-iterations = 50
-evaporation_factor = 0.1
+iterations = 10
+evaporation_factor = 0.5
 alpha = 1
-beta = 1
+beta = 5
 save_at = '/Users/Esteev/Desktop/Results/'
 nodes = []
+copy_nodes = []
 edges = []
 distances = []
 edgeLabels = {}
@@ -122,10 +139,13 @@ edgeLabels = {}
 init()
 country = Map(nodes, distances)
 ants = []
-copy_nodes = nodes
+copy_nodes += nodes
 random.shuffle(copy_nodes)
+print(distances)
 print(copy_nodes)
+print(nodes)
 print()
+
 for i in range(0, len(copy_nodes)):
     this_ant = Ant(copy_nodes[i], list(set(copy_nodes) - set(copy_nodes[i])))
     ants.append(this_ant)
@@ -137,17 +157,31 @@ while cur < iterations:
     for i in range(len(nodes) - 1):
         for ant in ants:
             ant.travel_next()
+    best = math.inf
+    for ant in ants:
+        if best > ant.trail_length:
+            best = ant.trail_length
     for ant in ants:
         ant.reset_ant()
-    print("HADOOPA")
     country.update_pheromones_global()
     print(country.pheromones)
+    print(best)
     cur += 1
-print(distances)
+
+shortest = []
+for i in range(0, node_count):
+    max = 0
+    for j in range(0, node_count):
+        if country.pheromones[i][j] > country.pheromones[i][max]:
+            max = j
+    shortest.append((chr(i+65), chr(max+65), country.get_distance(i, max)))
+
+print(shortest)
+
 
 # adding edges and edge labels to distance graph
 for i in range(0, node_count):
-    for j in range(0, node_count):
+    for j in range(i+1, node_count):
         if i != j:
             edges.append([nodes[i], nodes[j]])
             edgeLabels[(nodes[i], nodes[j])] = distances[i][j]
@@ -156,15 +190,13 @@ dg = draw_graph(distance_graph, 0)
 
 # adding edges and edge labels to pheromone graph
 for i in range(0, node_count):
-    for j in range(0, node_count):
+    for j in range(i+1, node_count):
         if i != j:
-            edgeLabels[(nodes[i], nodes[j])] = country.pheromones[i][j]
+            edgeLabels[(nodes[i], nodes[j])] = round(country.pheromones[i][j], 2)
 pheromone_graph = [edges, edgeLabels]
 pg = draw_graph(pheromone_graph, 1)
 
 '''
-
-edgeLabels.clear()
 # adding edges and edge labels to pheromone graph
 for i in range(0, node_count):
     for j in range(0, node_count):
@@ -174,3 +206,4 @@ pheromone_graph = [edges, edgeLabels]
 pg = draw_graph(pheromone_graph, 2)
 '''
 plt.show()
+
